@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -42,7 +43,7 @@ public class Challenge {
     private String description;
 
     @Column(name = "dead_Line", nullable = false)
-    private String deadLine;
+    private Date deadLine;
 
     @Column(name = "created_At", nullable = false)
     private LocalDateTime createdAt;

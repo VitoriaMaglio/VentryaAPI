@@ -1,6 +1,7 @@
 package com.ventrya.api.entity;
 
 
+import com.ventrya.api.entity.enums.PortfolioStatus;
 import jakarta.persistence.*;
 import lombok.Data;
 

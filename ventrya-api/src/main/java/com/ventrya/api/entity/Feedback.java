@@ -1,5 +1,7 @@
 package com.ventrya.api.entity;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import java.time.LocalDateTime;
 
@@ -28,6 +30,9 @@ public class Feedback {
     @Column(name = "comment", nullable = false, length = 2000)
     private String comment;
 
+
+    @Min(1)
+    @Max(5)
     @Column(name = "rating")
     private Integer rating;
 

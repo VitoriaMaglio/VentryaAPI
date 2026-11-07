@@ -1,16 +1,22 @@
 package com.ventrya.api.entity;
 
-import io.micrometer.common.lang.NonNullFields;
+
 import jakarta.persistence.*;
 import lombok.Data;
-import okhttp3.Challenge;
+import com.ventrya.api.entity.Challenge;
 import com.ventrya.api.entity.enums.Status;
 
 import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "application")
+@Table(
+        name = "application",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_application_student_challenge",
+                columnNames = {"student_id", "challenge_id"}
+        )
+)
 public class Application {
 
     @Id

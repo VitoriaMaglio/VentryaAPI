@@ -1,11 +1,15 @@
-CREATE SEQUENCE seq_organization START WITH 1 INCREMENT BY 1 NOCACHE;
-CREATE TABLE user(
-                     id NUMBER(19,0) PRIMARY KEY,
-                     name VARCHAR2(255 CHAR) NOT NULL,
-                     email VARCHAR2(255 CHAR) NOT NULL,
-                     description VARCHAR2(255 CHAR) NOT NULL,
-                     web_Site VARCHAR2(255 CHAR) NOT NULL,
-                     created_At TIMESTAMP(6) NOT NULL,
+CREATE SEQUENCE seq_ventrya_organization
+START WITH 1
+INCREMENT BY 1
+NOCACHE;
 
-                     CONSTRAINT uk_users_email UNIQUE (email)
+CREATE TABLE ventrya_organization (
+    id NUMBER(19,0) PRIMARY KEY,
+    name VARCHAR2(255 CHAR) NOT NULL,
+    email VARCHAR2(255 CHAR) NOT NULL,
+    description VARCHAR2(2000 CHAR) NOT NULL,
+    web_site VARCHAR2(255 CHAR),
+    created_at TIMESTAMP(6) NOT NULL,
+
+    CONSTRAINT uk_ventrya_organization_email UNIQUE (email)
 );

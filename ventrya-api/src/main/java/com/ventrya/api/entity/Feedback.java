@@ -7,17 +7,17 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "feedback")
+@Table(name = "ventrya_feedback")
 public class Feedback {
 
     @Id
     @GeneratedValue(
             strategy = GenerationType.SEQUENCE,
-            generator = "seq_feedback"
+            generator = "seq_ventrya_feedback"
     )
     @SequenceGenerator(
-            name = "seq_feedback",
-            sequenceName = "seq_feedback",
+            name = "seq_ventrya_feedback",
+            sequenceName = "SEQ_VENTRYA_FEEDBACK",
             allocationSize = 1
     )
     @Column(name = "id")
@@ -27,7 +27,7 @@ public class Feedback {
     @JoinColumn(name = "submission_id", nullable = false, unique = true)
     private Submission submission;
 
-    @Column(name = "comment", nullable = false, length = 2000)
+    @Column(name = "feedback_comment", nullable = false, length = 2000)
     private String comment;
 
 

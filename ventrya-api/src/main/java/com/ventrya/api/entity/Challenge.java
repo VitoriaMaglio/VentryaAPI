@@ -12,16 +12,16 @@ import java.util.Set;
 
 @Data
 @Entity
-@Table(name = "challenge")
+@Table(name = "ventrya_challenge")
 public class Challenge {
-    @Id @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_challenge")
-    @SequenceGenerator(name = "seq_challenge", sequenceName = "SEQ_CHALLENGE")
+    @Id @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_ventrya_challenge")
+    @SequenceGenerator(name = "seq_ventrya_challenge", sequenceName = "SEQ_VENTRYA_CHALLENGE", allocationSize = 1)
     private Long id;
 
     @OneToMany(mappedBy = "challenge")
     private Set<Application> applications = new HashSet<>();
 
-    @Column(name = "title", nullable = false, unique = true)
+    @Column(name = "title", nullable = false)
     private String title;
 
     @Enumerated(EnumType.STRING)
@@ -39,7 +39,7 @@ public class Challenge {
     @Column(name = "professional_Area", nullable = false)
     private ProfessionalArea professionalArea;
 
-    @Column(name = "description",nullable = false)
+    @Column(name = "description",nullable = false, length = 2000)
     private String description;
 
     @Column(name = "dead_Line", nullable = false)

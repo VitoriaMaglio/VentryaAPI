@@ -9,24 +9,24 @@ import java.util.Set;
 
 @Data
 @Entity
-@Table(name = "organization")
+@Table(name = "ventrya_organization")
 public class Organization {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE,generator = "seq_organization")
-    @SequenceGenerator(name = "seq_organization", sequenceName = "SEQ_ORGANIZATION", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE,generator = "seq_ventrya_organization")
+    @SequenceGenerator(name = "seq_ventrya_organization", sequenceName = "SEQ_VENTRYA_ORGANIZATION", allocationSize = 1)
     @Column(name = "id")
     private Long id;
 
     @Column(name = "name",nullable = false)
     private String name;
 
-    @Column(name = "email", unique = true,length = 225, nullable = false)
+    @Column(name = "email", unique = true,length = 255, nullable = false)
     private String email;
 
-    @Column(name = "description",nullable = false)
+    @Column(name = "description",nullable = false,length = 2000)
     private String description;
 
-    @Column(name = "web_Site",nullable = false)
+    @Column(name = "web_Site")
     private String webSite;
 
     @Column(name = "created_At")
@@ -36,7 +36,7 @@ public class Organization {
     //Set pois é uma coleção que n permite usuarios duplicados diferente de List
     @ManyToMany
     @JoinTable(//representa a tabela intermediária
-            name = "organization_users",
+            name = "ventrya_organization_user",
             joinColumns = @JoinColumn(name = "organization_Id"),//representa a chave estrangeira
             inverseJoinColumns = @JoinColumn(name = "user_Id")//representa a chave estrangeira
     )

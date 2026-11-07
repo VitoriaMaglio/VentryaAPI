@@ -1,5 +1,5 @@
-CREATE SEQUENCE seq_users START WITH 1 INCREMENT BY 1 NOCACHE;
-CREATE TABLE user(
+CREATE SEQUENCE seq_ventrya_users START WITH 1 INCREMENT BY 1 NOCACHE;
+CREATE TABLE ventrya_user(
                      id NUMBER(19,0) PRIMARY KEY,
                      name VARCHAR2(255 CHAR) NOT NULL,
                      email VARCHAR2(255 CHAR) NOT NULL,

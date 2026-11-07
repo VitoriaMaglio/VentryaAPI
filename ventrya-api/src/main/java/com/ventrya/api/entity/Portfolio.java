@@ -9,17 +9,17 @@ import lombok.Data;
 import java.time.LocalDateTime;
 @Data
 @Entity
-@Table(name = "portfolio")
+@Table(name = "ventrya_portfolio")
 public class Portfolio {
 
     @Id
     @GeneratedValue(
             strategy = GenerationType.SEQUENCE,
-            generator = "seq_portfolio"
+            generator = "seq_ventrya_portfolio"
     )
     @SequenceGenerator(
-            name = "seq_portfolio",
-            sequenceName = "seq_portfolio",
+            name = "seq_ventrya_portfolio",
+            sequenceName = "seq_ventrya_portfolio",
             allocationSize = 1
     )
     @Column(name = "id")

@@ -12,20 +12,20 @@ import java.util.Set;
 
 @Data
 @Entity
-@Table(name = "user")
+@Table(name = "ventrya_user")
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_users")//Define que o id vai ser gerado automatico com uma sequence ->
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_ventrya_users")//Define que o id vai ser gerado automatico com uma sequence ->
     //sequence é um obj no banco oracle q fornece valores numéricos
-    @SequenceGenerator(name = "seq_users", sequenceName = "SEQ_USERS", allocationSize = 1)//incrementa de 1 em 1
+    @SequenceGenerator(name = "seq_ventrya_users", sequenceName = "SEQ_VENTRYA_USERS", allocationSize = 1)//incrementa de 1 em 1
     @Column(name = "id")
     private Long id;
 
     @Column(name = "name",nullable = false)
     private String name;
 
-    @Column(name = "email", unique = true,length = 225, nullable = false)
+    @Column(name = "email", unique = true,length = 255, nullable = false)
     private String email;
 
     @Column(name = "password",nullable = false)

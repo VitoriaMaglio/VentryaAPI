@@ -8,17 +8,17 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "interview")
+@Table(name = "ventrya_interview")
 public class Interview {
 
     @Id
     @GeneratedValue(
             strategy = GenerationType.SEQUENCE,
-            generator = "seq_interview"
+            generator = "seq_ventrya_interview"
     )
     @SequenceGenerator(
-            name = "seq_interview",
-            sequenceName = "seq_interview",
+            name = "seq_ventrya_interview",
+            sequenceName = "seq_ventrya_interview",
             allocationSize = 1
     )
     @Column(name = "id")

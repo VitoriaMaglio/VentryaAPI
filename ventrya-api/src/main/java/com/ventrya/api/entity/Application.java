@@ -1,17 +1,13 @@
 package com.ventrya.api.entity;
-
-
 import jakarta.persistence.*;
 import lombok.Data;
-import com.ventrya.api.entity.Challenge;
 import com.ventrya.api.entity.enums.Status;
-
 import java.time.LocalDateTime;
 
 @Data
 @Entity
 @Table(
-        name = "application",
+        name = "ventrya_application",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_application_student_challenge",
                 columnNames = {"student_id", "challenge_id"}
@@ -20,8 +16,8 @@ import java.time.LocalDateTime;
 public class Application {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_application")
-    @SequenceGenerator(name = "seq_application", sequenceName = "SEQ_APPLICATION", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_ventrya_application")
+    @SequenceGenerator(name = "seq_ventrya_application", sequenceName = "SEQ_VENTRYA_APPLICATION", allocationSize = 1)
     private Long id;
 
     @ManyToOne//várias applications podem pertencer ao mesmo user

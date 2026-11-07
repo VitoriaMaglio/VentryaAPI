@@ -11,17 +11,17 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "submission")
+@Table(name = "ventrya_submission")
 public class Submission {
 
     @Id
     @GeneratedValue(
             strategy = GenerationType.SEQUENCE,
-            generator = "seq_submission"
+            generator = "seq_ventrya_submission"
     )
     @SequenceGenerator(
-            name = "seq_submission",
-            sequenceName = "seq_submission",
+            name = "seq_ventrya_submission",
+            sequenceName = "seq_ventrya_submission",
             allocationSize = 1
     )
     @Column(name = "id")

@@ -9,12 +9,12 @@ import java.util.Optional;
 
 public interface PortfolioRepository extends JpaRepository<Portfolio, Long> {
 
-    Page<Portfolio> findByStudentId(
+    Page<Portfolio> findByStudent_Id(
             Long studentId,
             Pageable pageable
     );
 
-    Optional<Portfolio> findBySubmissionId(
+    Optional<Portfolio> findBySubmission_Id(
             Long submissionId
     );
 

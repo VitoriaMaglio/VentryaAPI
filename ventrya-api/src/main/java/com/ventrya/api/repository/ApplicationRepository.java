@@ -8,17 +8,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ApplicationRepository extends JpaRepository<Application, Long> {
 
-    boolean existsByStudentsIdAndChallengeId(//impede candidaturas duplicadas
+    boolean existsByStudents_IdAndChallenge_Id(//impede candidaturas duplicadas
             Long studentId,
             Long challengeId
     );
 
-    Page<Application> findByStudentsId(
+    Page<Application> findByStudents_Id(
             Long studentId,
             Pageable pageable
     );
 
-    Page<Application> findByChallengeId(
+    Page<Application> findByChallenge_Id(
             Long challengeId,
             Pageable pageable
     );

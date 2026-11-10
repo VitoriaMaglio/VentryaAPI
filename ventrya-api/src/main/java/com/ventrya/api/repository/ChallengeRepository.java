@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ChallengeRepository extends JpaRepository<Challenge, Long> {
 
-    Page<Challenge> findByOrganizationId(
+    Page<Challenge> findByOrganization_Id(
             Long organizationId,
             Pageable pageable
     );

@@ -10,7 +10,7 @@ public interface OrganizationRepository extends JpaRepository<Organization, Long
 
     boolean existsByEmail(String email);
 
-    Page<Organization> findByRepresentativesId(
+    Page<Organization> findByRepresentatives_Id(
             Long userId,
             Pageable pageable
     );

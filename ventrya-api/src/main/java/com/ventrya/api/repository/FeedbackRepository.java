@@ -8,10 +8,10 @@ import java.util.Optional;
 
 public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
 
-    Optional<Feedback> findBySubmissionId(
+    Optional<Feedback> findBySubmission_Id(
             Long submissionId
     );
 
-    boolean existsBySubmissionId(Long submissionId);
+    boolean existsBySubmission_Id(Long submissionId);
 //verifica se um feedback já foi gerado evitando criar outro para a mesma enrtega
 }

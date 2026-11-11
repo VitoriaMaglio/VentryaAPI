@@ -53,17 +53,42 @@ public class SecurityConfig {
                         )
                 )
                 .authorizeHttpRequests(auth -> auth
+
                         .requestMatchers(
                                 "/api/auth/register",
-                                "/api/auth/login"
+                                "/api/auth/login",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**"
                         ).permitAll()
+
+                        .requestMatchers("/api/users/me")
+                        .authenticated()
+
+                        .requestMatchers("/api/users/**")
+                        .hasRole("ADMIN")
+
+                        .requestMatchers("/api/applications/**")
+                        .hasRole("STUDENT")
+
+                        .requestMatchers("/api/submissions/**")
+                        .hasRole("STUDENT")
+
+                        .requestMatchers("/api/feedbacks/**")
+                        .hasRole("STUDENT")
+
+                        .requestMatchers("/api/portfolios/**")
+                        .hasRole("STUDENT")
+
+                        .requestMatchers("/api/interviews/**")
+                        .hasRole("STUDENT")
+
                         .requestMatchers(
-                                "/api/users/me"
+                                "/api/organizations/**",
+                                "/api/challenges/**"
                         ).authenticated()
-                        .requestMatchers(
-                                "/api/users/**"
-                        ).hasRole("ADMIN")
-                        .anyRequest().authenticated()
+
+                        .anyRequest().denyAll()
                 )
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(

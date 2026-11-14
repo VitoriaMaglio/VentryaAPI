@@ -53,7 +53,6 @@ public class SecurityConfig {
                         )
                 )
                 .authorizeHttpRequests(auth -> auth
-
                         .requestMatchers(
                                 "/api/auth/register",
                                 "/api/auth/login",
@@ -62,10 +61,7 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        .requestMatchers("/api/users/me")
-                        .authenticated()
-
-                        .requestMatchers("/api/users/**")
+                        .requestMatchers("/api/admin/**")
                         .hasRole("ADMIN")
 
                         .requestMatchers("/api/applications/**")
@@ -83,10 +79,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/interviews/**")
                         .hasRole("STUDENT")
 
-                        .requestMatchers(
-                                "/api/organizations/**",
-                                "/api/challenges/**"
-                        ).authenticated()
+                        .requestMatchers("/api/users/me")
+                        .authenticated()
+
+                        .requestMatchers("/api/organizations/**", "/api/challenges/**")
+                        .authenticated()
 
                         .anyRequest().denyAll()
                 )

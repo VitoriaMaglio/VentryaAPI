@@ -30,6 +30,7 @@ public class SubmissionService {
     private final ApplicationRepository applicationRepository;
     private final UserRepository userRepository;
     private final SubmissionMapper submissionMapper;
+    private final com.ventrya.api.messaging.DomainEventPublisher eventPublisher;
 
     // Enviar solução de um desafio
     @Transactional
@@ -94,6 +95,7 @@ public class SubmissionService {
             Submission saved = submissionRepository
                     .saveAndFlush(submission);
 
+            eventPublisher.submissionCreated(saved.getId());
             return submissionMapper.toResponse(saved);
 
         } catch (DataIntegrityViolationException exception) {

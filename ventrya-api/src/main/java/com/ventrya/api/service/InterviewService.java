@@ -33,6 +33,7 @@ public class InterviewService {
     private final InterviewQuestionRepository interviewQuestionRepository;
     private final UserRepository userRepository;
     private final InterviewMapper interviewMapper;
+    private final com.ventrya.api.messaging.DomainEventPublisher eventPublisher;
 
     private static final List<String> QUESTIONS = List.of(
             "Fale um pouco sobre você.",
@@ -212,6 +213,7 @@ public class InterviewService {
         }
 
         Interview saved = interviewRepository.saveAndFlush(interview);
+        if (allAnswered) eventPublisher.interviewCompleted(saved.getId());
 
         return interviewMapper.toResponse(saved);
     }

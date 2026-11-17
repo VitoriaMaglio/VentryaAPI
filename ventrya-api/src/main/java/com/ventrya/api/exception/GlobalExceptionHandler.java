@@ -17,6 +17,8 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.security.access.AccessDeniedException;
+import lombok.extern.slf4j.Slf4j;
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -117,6 +119,13 @@ public class GlobalExceptionHandler {
             Exception ex,
             HttpServletRequest request
     ) {
+        log.error(
+                "Erro inesperado ao processar {} {}",
+                request.getMethod(),
+                request.getRequestURI(),
+                ex
+        );
+
         return buildResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Ocorreu um erro interno inesperado.",
@@ -124,7 +133,6 @@ public class GlobalExceptionHandler {
                 Map.of()
         );
     }
-
     private ResponseEntity<ApiErrorResponse> buildResponse(
             HttpStatusCode status,
             String message,

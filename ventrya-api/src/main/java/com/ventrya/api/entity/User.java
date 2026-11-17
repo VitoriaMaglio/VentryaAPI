@@ -17,7 +17,7 @@ public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_ventrya_users")//Define que o id vai ser gerado automatico com uma sequence ->
-    //sequence é um obj no banco oracle q fornece valores numéricos
+
     @SequenceGenerator(name = "seq_ventrya_users", sequenceName = "SEQ_VENTRYA_USERS", allocationSize = 1)//incrementa de 1 em 1
     @Column(name = "id")
     private Long id;
@@ -38,23 +38,17 @@ public class User {
     @Column(name = "created_At")
     private LocalDateTime createdAt;
 
-    @Enumerated(EnumType.STRING)//@Enumerated informa ao JPA que aquele atributo é um enum e define como seu valor será armazenado no banco.
-    //.STRING salva com o valor do enum
-    //.ORDINAL salva com numero da posição do valor
-    @Column(name = "role", nullable = false)//validações nos dados
+    @Enumerated(EnumType.STRING)
+
+    @Column(name = "role", nullable = false)
     private Role role;
 
-    @ManyToMany(mappedBy = "representatives")//mappedBy representa o atributo Java da classe q define o relacionamento
-    private Set<Organization> organizations = new HashSet<>();//aqui também precisamos de uma coleção para representar as organizações q um user pode ter
+    @ManyToMany(mappedBy = "representatives")
+    private Set<Organization> organizations = new HashSet<>();
 
     @OneToMany(mappedBy = "students")
     private Set<Application> applications = new HashSet<>();
-    /*
-@OneToOne
-@OneToMany
-@ManyToOne
-@ManyToMany -> requires a tabela intermediária que possui os dois ids da duas tabelas no relacionamento
-     */
+
 
 
 

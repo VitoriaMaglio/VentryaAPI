@@ -20,8 +20,8 @@ public class Application {
     @SequenceGenerator(name = "seq_ventrya_application", sequenceName = "SEQ_VENTRYA_APPLICATION", allocationSize = 1)
     private Long id;
 
-    @ManyToOne//várias applications podem pertencer ao mesmo user
-    @JoinColumn(name = "student_Id")// joinColumn representa a fk, essa classe q vai guardar o id do estudante pois é o lado q domina o relacionamento
+    @ManyToOne
+    @JoinColumn(name = "student_Id")
     private User students;
 
     @ManyToOne

@@ -13,5 +13,5 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
     );
 
     boolean existsBySubmission_Id(Long submissionId);
-//verifica se um feedback já foi gerado evitando criar outro para a mesma enrtega
+
 }

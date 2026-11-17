@@ -8,7 +8,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import com.ventrya.api.dto.request.ChallengeRequestDTO;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 @RestController
 @RequestMapping("/api/challenges")
 @RequiredArgsConstructor
@@ -59,4 +62,33 @@ public class ChallengeController {
                 )
         );
     }
+
+    @PostMapping("/organization/{organizationId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ChallengeResponseDTO> create(
+            @PathVariable Long organizationId,
+            @Valid @RequestBody ChallengeRequestDTO request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(challengeService.create(organizationId, request));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ChallengeResponseDTO> update(
+            @PathVariable Long id,
+            @Valid @RequestBody ChallengeRequestDTO request
+    ) {
+        return ResponseEntity.ok(
+                challengeService.update(id, request)
+        );
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        challengeService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
 }

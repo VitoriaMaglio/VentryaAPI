@@ -17,7 +17,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-
+import org.springframework.security.config.Customizer;
 @RequiredArgsConstructor
 @Configuration
 @EnableMethodSecurity
@@ -50,6 +50,7 @@ public class SecurityConfig {
 
         return http
                 .csrf(csrf -> csrf.disable())//desative CSRF pois a api usa tokens Bearer ao inves de cookies
+                .cors(Customizer.withDefaults())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS

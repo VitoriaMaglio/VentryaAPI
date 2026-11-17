@@ -32,15 +32,13 @@ public class Organization {
     @Column(name = "created_At")
     private LocalDateTime createdAt;
 
-    //como vamos representar cários usuários q podem estar atreladados a uma organização precisamos d euma colection
-    //Set pois é uma coleção que n permite usuarios duplicados diferente de List
     @ManyToMany
-    @JoinTable(//representa a tabela intermediária
+    @JoinTable(
             name = "ventrya_organization_user",
-            joinColumns = @JoinColumn(name = "organization_Id"),//representa a chave estrangeira
-            inverseJoinColumns = @JoinColumn(name = "user_Id")//representa a chave estrangeira
+            joinColumns = @JoinColumn(name = "organization_Id"),
+            inverseJoinColumns = @JoinColumn(name = "user_Id")
     )
-    private Set<User> representatives = new HashSet<>();//new HashSet inicia a coleção
+    private Set<User> representatives = new HashSet<>();
 
     @OneToMany(mappedBy = "organization")
     private Set<Challenge> challenges = new HashSet<>();

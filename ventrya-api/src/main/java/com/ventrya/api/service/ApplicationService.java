@@ -31,12 +31,6 @@ import java.time.LocalDateTime;
 public class ApplicationService {
 
 
-    //Um estudante autenticado encontra um desafio e clica em "Candidatar-se".
-    //método apply precisa identificar user, buscar desafio, verificar se o estudante ja se candidatou,criar uma application vinculada, definir status inicial e data, salvar e retorn
-
-// Criar candidatura
-// apply(Long challengeId, String studentEmail)
-
     private final ApplicationRepository applicationRepository;
     private final ChallengeRepository challengeRepository;
     private final UserRepository userRepository;

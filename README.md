@@ -2,6 +2,19 @@
 Global Solution 2026/2 · FIAP · Java Advanced · CitizenTech
 API REST para empregabilidade jovem: desafios práticos, avaliação com inteligência artificial, portfólio profissional automático e entrevistas simuladas.
 
+📑 Sumário
+1. Problema e proposta
+2. Tecnologias
+3. Arquitetura e processamento assíncrono
+4. Modelagem e regras de negócio
+5. Autenticação, roles e segurança
+6. Endpoints da API
+7. Fluxo completo de utilização
+8. Como executar localmente
+9. Testes e evidências
+10. Spring AI e Gemini: inteligência artificial aplicada
+11. Deploy no Render e serviços em nuvem
+12. Correspondência com os requisitos acadêmicos
 🎯 1. Problema e proposta
 Jovens em busca do primeiro emprego enfrentam um ciclo recorrente: muitas vagas exigem experiência prévia, mas é difícil adquirir experiência sem uma oportunidade inicial.
 

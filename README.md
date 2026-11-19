@@ -634,6 +634,9 @@ O domínio contém nove entidades principais relacionadas. Os endpoints de organ
 | API publicada | https://ventryaapi.onrender.com |
 | Swagger UI | https://ventryaapi.onrender.com/swagger-ui/index.html |
 | Especificação OpenAPI | https://ventryaapi.onrender.com/v3/api-docs |
+| Video PITCH | hhttps://www.youtube.com/watch?v=7nvkJwvaAHE |
+| Projeto FRONT Mobile | https://github.com/marina-2907/Ventrya-Mobile |
+
 
 **Usuário STUDENT:** uma conta de avaliação pode ser criada por `POST /api/auth/register`, seguida de autenticação em `POST /api/auth/login`. O cadastro público atribui o papel `STUDENT`.
 

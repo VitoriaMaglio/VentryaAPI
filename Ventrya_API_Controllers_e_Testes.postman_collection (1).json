@@ -1,0 +1,4539 @@
+{
+  "info": {
+    "_postman_id": "b4cadc0b-3789-4f12-ad90-e4eb8c585b0f",
+    "name": "Ventrya API — Controllers e Testes",
+    "description": "Ventrya API - testes funcionais caixa-preta automatizados (positivos e negativos), alinhados aos Test Cases TC01-TC67 do Azure Boards (projeto VentryaAPI).\n\nCOMO EXECUTAR\n1. Importe esta collection e o environment \"Ventrya API - Render\".\n2. Preencha adminEmail e adminPassword (conta ADMIN provisionada no banco).\n3. Rode a collection inteira no Collection Runner (ou Newman), na ordem 01 a 09, sem pular pastas.\n\nO QUE É AUTOMÁTICO\n- baseUrl = https://ventryaapi.onrender.com; a primeira requisição acorda o Render antes dos testes.\n- E-mail do estudante gerado a cada execução: o fluxo pode ser repetido sem resetar dados.\n- Tokens (token, studentToken, adminToken) e IDs (organização, desafio, candidatura, entrega, feedback, portfólio, entrevista) são salvos pelos scripts.\n- O desafio usado no fluxo é escolhido automaticamente (OPEN e dentro do prazo).\n- Feedback e portfólio são gerados de forma assíncrona (RabbitMQ + IA): as requisições repetem a consulta até pollMaxAttempts x pollIntervalMs (padrão 12 x 5 s).\n- Exclusões com 409 têm proteção: nunca apontam para dados sem vínculo.\n- Cada asserção traz o código do Test Case (TCxx) do Azure DevOps.\n\nNewman: newman run Ventrya_API_Controllers_e_Testes.postman_collection.json -e Ventrya_API_Render.postman_environment.json --env-var adminEmail=... --env-var adminPassword=...",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "47850383"
+  },
+  "item": [
+    {
+      "name": "01 - Autenticação e perfil",
+      "item": [
+        {
+          "name": "Cadastro - 201",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "",
+                  "// e-mail único por execução: o fluxo completo pode ser repetido sem conflito",
+                  "const email = 'estudante.' + Date.now() + '@example.com';",
+                  "save('studentEmail', email);",
+                  "// Render (plano gratuito) hiberna: acorda a API antes do primeiro teste",
+                  "const base = pm.variables.get('baseUrl');",
+                  "const ping = (n) => pm.sendRequest({ url: base + '/v3/api-docs', method: 'GET' }, (e, r) => {",
+                  "    if ((e || (r && r.code >= 500)) && n > 0) { setTimeout(() => ping(n - 1), 10000); }",
+                  "});",
+                  "ping(6);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC01 - Status 201 Created', () => pm.response.to.have.status(201));",
+                  "const b = json();",
+                  "pm.test('TC01 - Retorna token JWT e dados do usuário', () => {",
+                  "    pm.expect(b.token, 'token').to.be.a('string').and.not.empty;",
+                  "    pm.expect(b.user.email).to.eql(pm.variables.get('studentEmail'));",
+                  "    pm.expect(b.user.professionalArea).to.eql('TECHNOLOGY');",
+                  "});",
+                  "pm.test('TC01 - Papel atribuído é STUDENT', () => pm.expect(b.user.role).to.eql('STUDENT'));",
+                  "pm.test('TC01 - Senha não é exposta na resposta', () => {",
+                  "    pm.expect(pm.response.text()).to.not.include(pm.variables.get('studentPassword'));",
+                  "    pm.expect(b.user).to.not.have.property('password');",
+                  "});",
+                  "if (pm.response.code === 201 && b && b.token) { save('studentToken', b.token); save('token', b.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \" User PostmanADMIN\",\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\",\n  \"professionalArea\": \"TECHNOLOGY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Use um e-mail ainda não cadastrado."
+          },
+          "response": []
+        },
+        {
+          "name": "Login - 200 (salva token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC02 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "const b = json();",
+                  "pm.test('TC02 - Token JWT emitido', () => pm.expect(b.token).to.be.a('string').and.not.empty);",
+                  "pm.test('TC02 - Usuário autenticado é o estudante cadastrado', () => {",
+                  "    pm.expect(b.user.email).to.eql(pm.variables.get('studentEmail'));",
+                  "    pm.expect(b.user.role).to.eql('STUDENT');",
+                  "});",
+                  "if (pm.response.code === 200 && b && b.token) { save('token', b.token); save('studentToken', b.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login ADMIN - 200 (salva adminToken)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "",
+                  "if (!pm.variables.get('adminEmail') || !pm.variables.get('adminPassword')) {",
+                  "    console.warn('Preencha adminEmail e adminPassword (conta ADMIN provisionada no banco).');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "",
+                  "pm.test('SETUP - Credenciais ADMIN configuradas', () => {",
+                  "    pm.expect(pm.variables.get('adminEmail'), 'adminEmail').to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('SETUP - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "const b = json();",
+                  "pm.test('SETUP - Usuário tem papel ADMIN', () => pm.expect(b.user.role).to.eql('ADMIN'));",
+                  "if (pm.response.code === 200 && b && b.token) save('adminToken', b.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Pré-requisito dos testes ADMIN. Conta ADMIN provisionada no banco; preencha adminEmail e adminPassword."
+          },
+          "response": []
+        },
+        {
+          "name": "Cadastro duplicado - 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC03 - Status 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('TC03 - Corpo de erro padronizado (status 409)', () => errorBody(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Estudante Postman\",\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\",\n  \"professionalArea\": \"TECHNOLOGY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cadastro inválido - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC04 - Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('TC04 - Corpo de erro padronizado (status 400)', () => errorBody(400));",
+                  "pm.test('TC04 - validationErrors aponta os campos inválidos', () => {",
+                  "    const b = json();",
+                  "    pm.expect(b.validationErrors, 'validationErrors').to.be.an('object');",
+                  "    ['name', 'email', 'password'].forEach(f => pm.expect(b.validationErrors).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"A\",\n  \"email\": \"invalido\",\n  \"password\": \"123\",\n  \"professionalArea\": \"TECHNOLOGY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login inválido - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC05 - Status 401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('TC05 - Nenhum token é emitido', () => pm.expect(pm.response.text()).to.not.include('\"token\"'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"senha-errada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Meu perfil - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC06 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "const b = json();",
+                  "pm.test('TC06 - Perfil do usuário autenticado', () => {",
+                  "    pm.expect(b.email).to.eql(pm.variables.get('studentEmail'));",
+                  "    pm.expect(b.role).to.eql('STUDENT');",
+                  "    pm.expect(b).to.have.property('id');",
+                  "});",
+                  "pm.test('TC06 - Senha não é exposta', () => pm.expect(b).to.not.have.property('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Meu perfil sem token - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC07 - Status 401 Unauthorized', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Organizações",
+      "item": [
+        {
+          "name": "Listar organizações - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC08 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC08 - Retorno paginado (content, totalElements)', () => { const b = json(); pm.expect(b.content).to.be.an('array'); pm.expect(b).to.have.property('totalElements'); });",
+                  "const b = json();",
+                  "if (b && b.content && b.content.length) save('organizationId', b.content[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Organização por ID - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC09 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC09 - Retorna a organização solicitada', () => {",
+                  "    const b = json();",
+                  "    pm.expect(String(b.id)).to.eql(String(pm.variables.get('organizationId')));",
+                  "    pm.expect(b.name).to.be.a('string').and.not.empty;",
+                  "    pm.expect(b.email).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations/{{organizationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations",
+                "{{organizationId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Organização inexistente - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC10 - Status 404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('TC10 - Corpo de erro padronizado (status 404)', () => errorBody(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations",
+                "999999999"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Criar organização - 201 (salva crudOrganizationId)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "save('crudOrganizationEmail', 'org.crud.' + Date.now() + '@example.com');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC11 - Status 201 Created', () => pm.response.to.have.status(201));",
+                  "const b = json();",
+                  "pm.test('TC11 - Organização criada com os dados enviados', () => {",
+                  "    pm.expect(b.id).to.be.a('number');",
+                  "    pm.expect(b.name).to.eql('Organização Postman CRUD');",
+                  "    pm.expect(b.email).to.eql(pm.variables.get('crudOrganizationEmail'));",
+                  "    pm.expect(b.webSite).to.eql('https://example.com');",
+                  "});",
+                  "if (pm.response.code === 201 && b) save('crudOrganizationId', b.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations"
+              ]
+            },
+            "description": "Usa adminToken. O e-mail é gerado no pré-request e salvo como crudOrganizationEmail. Execute antes dos demais testes de CRUD.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Organização Postman CRUD\",\n  \"email\": \"{{crudOrganizationEmail}}\",\n  \"description\": \"Organização de testes administrativos da Ventrya API.\",\n  \"webSite\": \"https://example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Consultar organização criada - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC12 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC12 - Retorna a organização criada', () => {",
+                  "    const b = json();",
+                  "    pm.expect(String(b.id)).to.eql(String(pm.variables.get('crudOrganizationId')));",
+                  "    pm.expect(b.email).to.eql(pm.variables.get('crudOrganizationEmail'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations/{{crudOrganizationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations",
+                "{{crudOrganizationId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Atualizar organização - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC13 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC13 - Dados atualizados', () => {",
+                  "    const b = json();",
+                  "    pm.expect(b.name).to.eql('Organização Postman Atualizada');",
+                  "    pm.expect(b.description).to.eql('Organização atualizada via teste de CRUD.');",
+                  "    pm.expect(b.webSite).to.eql('https://example.org');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations/{{crudOrganizationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations",
+                "{{crudOrganizationId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Organização Postman Atualizada\",\n  \"email\": \"{{crudOrganizationEmail}}\",\n  \"description\": \"Organização atualizada via teste de CRUD.\",\n  \"webSite\": \"https://example.org\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - E-mail duplicado - 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC14 - Status 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('TC14 - Corpo de erro padronizado (status 409)', () => errorBody(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Organização Duplicada\",\n  \"email\": \"{{crudOrganizationEmail}}\",\n  \"description\": \"Teste de conflito de e-mail.\",\n  \"webSite\": \"https://example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Dados inválidos - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC15 - Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('TC15 - Corpo de erro padronizado (status 400)', () => errorBody(400));",
+                  "pm.test('TC15 - validationErrors aponta os campos inválidos', () => {",
+                  "    const b = json();",
+                  "    pm.expect(b.validationErrors, 'validationErrors').to.be.an('object');",
+                  "    ['name', 'email'].forEach(f => pm.expect(b.validationErrors).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"email\": \"email-invalido\",\n  \"description\": \"Teste de validação\",\n  \"webSite\": \"https://example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "STUDENT - Criar organização - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC16 - Status 403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('TC16 - Corpo de erro padronizado (status 403)', () => errorBody(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acesso indevido\",\n  \"email\": \"student.org@example.com\",\n  \"description\": \"Tentativa de criação sem permissão.\",\n  \"webSite\": \"https://example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Excluir organização com desafios - 409",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "",
+                  "// Proteção: usa sempre uma organização que tenha desafios, para nunca excluir dados reais",
+                  "pm.sendRequest({",
+                  "    url: pm.variables.get('baseUrl') + '/api/challenges?page=0&size=50',",
+                  "    method: 'GET',",
+                  "    header: { Authorization: 'Bearer ' + pm.variables.get('token') }",
+                  "}, (e, r) => {",
+                  "    let orgId = '999999999';",
+                  "    try { const c = r.json().content || []; if (c.length) orgId = c[0].organizationId; } catch (x) {}",
+                  "    save('organizationId', orgId);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC17 - Status 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('TC17 - Corpo de erro padronizado (status 409)', () => errorBody(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations/{{organizationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations",
+                "{{organizationId}}"
+              ]
+            },
+            "description": "Use organizationId de uma organização que realmente tenha desafios. Não exclui dados.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Excluir organização inexistente - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC19 - Status 404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('TC19 - Corpo de erro padronizado (status 404)', () => errorBody(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations",
+                "999999999"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Desafios",
+      "item": [
+        {
+          "name": "Listar desafios - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC20 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC20 - Retorno paginado (content, totalElements)', () => { const b = json(); pm.expect(b.content).to.be.an('array'); pm.expect(b).to.have.property('totalElements'); });",
+                  "// Seleciona um desafio OPEN e dentro do prazo para o fluxo de candidatura/entrega",
+                  "const b = json();",
+                  "const today = new Date().toISOString().slice(0, 10);",
+                  "const list = (b && b.content) || [];",
+                  "const open = list.find(c => c.status === 'OPEN' && c.deadline >= today) || list[0];",
+                  "pm.test('TC20 - Existe desafio OPEN dentro do prazo', () => pm.expect(open && open.status).to.eql('OPEN'));",
+                  "if (open) { save('challengeId', open.id); save('organizationId', open.organizationId); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Desafio por ID - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC21 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC21 - Retorna o desafio solicitado com organização', () => {",
+                  "    const b = json();",
+                  "    pm.expect(String(b.id)).to.eql(String(pm.variables.get('challengeId')));",
+                  "    ['title', 'description', 'professionalArea', 'difficulty', 'deadline', 'status', 'organizationId'].forEach(f => pm.expect(b).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/{{challengeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "{{challengeId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Filtrar área TECHNOLOGY - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC22 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC22 - Retorno paginado (content, totalElements)', () => { const b = json(); pm.expect(b.content).to.be.an('array'); pm.expect(b).to.have.property('totalElements'); });",
+                  "pm.test('TC22 - Todos os desafios são da área TECHNOLOGY', () => json().content.forEach(c => pm.expect(c.professionalArea).to.eql('TECHNOLOGY')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/area/TECHNOLOGY?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "area",
+                "TECHNOLOGY"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Filtrar organização - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC23 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC23 - Retorno paginado (content, totalElements)', () => { const b = json(); pm.expect(b.content).to.be.an('array'); pm.expect(b).to.have.property('totalElements'); });",
+                  "pm.test('TC23 - Todos os desafios pertencem à organização', () => json().content.forEach(c => pm.expect(String(c.organizationId)).to.eql(String(pm.variables.get('organizationId')))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/organization/{{organizationId}}?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "organization",
+                "{{organizationId}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Desafio inexistente - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC24 - Status 404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('TC24 - Corpo de erro padronizado (status 404)', () => errorBody(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "999999999"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Área inválida - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC25 - Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('TC25 - Corpo de erro padronizado (status 400)', () => errorBody(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/area/INVALID_AREA",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "area",
+                "INVALID_AREA"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Criar desafio - 201 (salva crudChallengeId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC26 - Status 201 Created', () => pm.response.to.have.status(201));",
+                  "const b = json();",
+                  "pm.test('TC26 - Desafio criado e vinculado à organização', () => {",
+                  "    pm.expect(b.id).to.be.a('number');",
+                  "    pm.expect(b.title).to.eql('Desafio Postman CRUD');",
+                  "    pm.expect(b.difficulty).to.eql(pm.variables.get('challengeDifficulty'));",
+                  "    pm.expect(String(b.organizationId)).to.eql(String(pm.variables.get('crudOrganizationId')));",
+                  "});",
+                  "if (pm.response.code === 201 && b) save('crudChallengeId', b.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/organization/{{crudOrganizationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "organization",
+                "{{crudOrganizationId}}"
+              ]
+            },
+            "description": "Crie primeiro a organização CRUD. Configure challengeDifficulty conforme enum e challengeDeadline como data futura (AAAA-MM-DD).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Desafio Postman CRUD\",\n  \"description\": \"Desenvolver uma API REST para melhorar o acesso de jovens a oportunidades profissionais.\",\n  \"professionalArea\": \"TECHNOLOGY\",\n  \"difficulty\": \"{{challengeDifficulty}}\",\n  \"requirements\": \"Conhecimentos básicos em Java e Spring Boot.\",\n  \"deadline\": \"{{challengeDeadline}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Consultar desafio criado - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC27 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC27 - Retorna o desafio criado', () => pm.expect(String(json().id)).to.eql(String(pm.variables.get('crudChallengeId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/{{crudChallengeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "{{crudChallengeId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Atualizar desafio - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC28 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC28 - Título atualizado', () => pm.expect(json().title).to.eql('Desafio Postman Atualizado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/{{crudChallengeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "{{crudChallengeId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Desafio Postman Atualizado\",\n  \"description\": \"Desenvolver uma API REST para melhorar o acesso de jovens a oportunidades profissionais.\",\n  \"professionalArea\": \"TECHNOLOGY\",\n  \"difficulty\": \"{{challengeDifficulty}}\",\n  \"requirements\": \"Conhecimentos básicos em Java e Spring Boot.\",\n  \"deadline\": \"{{challengeDeadline}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Prazo passado - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC29 - Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('TC29 - Corpo de erro padronizado (status 400)', () => errorBody(400));",
+                  "pm.test('TC29 - validationErrors aponta os campos inválidos', () => {",
+                  "    const b = json();",
+                  "    pm.expect(b.validationErrors, 'validationErrors').to.be.an('object');",
+                  "    ['deadline'].forEach(f => pm.expect(b.validationErrors).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/organization/{{crudOrganizationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "organization",
+                "{{crudOrganizationId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Desafio Postman CRUD\",\n  \"description\": \"Desenvolver uma API REST para melhorar o acesso de jovens a oportunidades profissionais.\",\n  \"professionalArea\": \"TECHNOLOGY\",\n  \"difficulty\": \"{{challengeDifficulty}}\",\n  \"requirements\": \"Conhecimentos básicos em Java e Spring Boot.\",\n  \"deadline\": \"2020-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Organização inexistente ao criar desafio - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC30 - Status 404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('TC30 - Corpo de erro padronizado (status 404)', () => errorBody(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/organization/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "organization",
+                "999999999"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Desafio Postman CRUD\",\n  \"description\": \"Desenvolver uma API REST para melhorar o acesso de jovens a oportunidades profissionais.\",\n  \"professionalArea\": \"TECHNOLOGY\",\n  \"difficulty\": \"{{challengeDifficulty}}\",\n  \"requirements\": \"Conhecimentos básicos em Java e Spring Boot.\",\n  \"deadline\": \"{{challengeDeadline}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "STUDENT - Criar desafio - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC31 - Status 403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('TC31 - Corpo de erro padronizado (status 403)', () => errorBody(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/organization/{{crudOrganizationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "organization",
+                "{{crudOrganizationId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Desafio Postman CRUD\",\n  \"description\": \"Desenvolver uma API REST para melhorar o acesso de jovens a oportunidades profissionais.\",\n  \"professionalArea\": \"TECHNOLOGY\",\n  \"difficulty\": \"{{challengeDifficulty}}\",\n  \"requirements\": \"Conhecimentos básicos em Java e Spring Boot.\",\n  \"deadline\": \"{{challengeDeadline}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "STUDENT - Atualizar desafio - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC32 - Status 403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('TC32 - Corpo de erro padronizado (status 403)', () => errorBody(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/{{crudChallengeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "{{crudChallengeId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Desafio Postman CRUD\",\n  \"description\": \"Desenvolver uma API REST para melhorar o acesso de jovens a oportunidades profissionais.\",\n  \"professionalArea\": \"TECHNOLOGY\",\n  \"difficulty\": \"{{challengeDifficulty}}\",\n  \"requirements\": \"Conhecimentos básicos em Java e Spring Boot.\",\n  \"deadline\": \"{{challengeDeadline}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "STUDENT - Excluir desafio - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC33 - Status 403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('TC33 - Corpo de erro padronizado (status 403)', () => errorBody(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/{{crudChallengeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "{{crudChallengeId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Excluir desafio criado - 204",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC35 - Status 204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/{{crudChallengeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "{{crudChallengeId}}"
+              ]
+            },
+            "description": "Desafio de testes sem candidaturas. Execute antes da exclusão da organização CRUD.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Excluir organização criada - 204",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC18 - Status 204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.test('TC18 - Sem corpo na resposta', () => pm.expect(pm.response.text()).to.eql(''));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/organizations/{{crudOrganizationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "organizations",
+                "{{crudOrganizationId}}"
+              ]
+            },
+            "description": "Execute somente depois de excluir o desafio CRUD associado; caso contrário, 409.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Excluir desafio inexistente - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC36 - Status 404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('TC36 - Corpo de erro padronizado (status 404)', () => errorBody(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "999999999"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 - Candidaturas",
+      "item": [
+        {
+          "name": "Criar candidatura - 201 (salva applicationId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC37 - Status 201 Created', () => pm.response.to.have.status(201));",
+                  "const b = json();",
+                  "pm.test('TC37 - Candidatura criada para o desafio e aprovada', () => {",
+                  "    pm.expect(b.id).to.be.a('number');",
+                  "    pm.expect(String(b.challengeId)).to.eql(String(pm.variables.get('challengeId')));",
+                  "    pm.expect(b.status).to.eql('APPROVED');",
+                  "});",
+                  "if (pm.response.code === 201 && b) save('applicationId', b.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/challenge/{{challengeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "challenge",
+                "{{challengeId}}"
+              ]
+            },
+            "description": "Exige desafio OPEN, dentro do prazo e ainda não utilizado por este estudante."
+          },
+          "response": []
+        },
+        {
+          "name": "Minhas candidaturas - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC38 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC38 - Retorno paginado (content, totalElements)', () => { const b = json(); pm.expect(b.content).to.be.an('array'); pm.expect(b).to.have.property('totalElements'); });",
+                  "pm.test('TC38 - Lista contém a candidatura criada', () => pm.expect(json().content.map(a => String(a.id))).to.include(String(pm.variables.get('applicationId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/me?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "me"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Candidatura por ID - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC39 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC39 - Retorna a candidatura do estudante', () => {",
+                  "    const b = json();",
+                  "    pm.expect(String(b.id)).to.eql(String(pm.variables.get('applicationId')));",
+                  "    pm.expect(String(b.challengeId)).to.eql(String(pm.variables.get('challengeId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "{{applicationId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Candidatura duplicada - 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC40 - Status 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('TC40 - Corpo de erro padronizado (status 409)', () => errorBody(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/challenge/{{challengeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "challenge",
+                "{{challengeId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN - Excluir desafio com candidaturas - 409",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "",
+                  "// Proteção: só executa se o estudante já tiver candidatura no desafio (evita excluir desafio real)",
+                  "if (!pm.variables.get('applicationId')) {",
+                  "    console.warn('Sem candidatura criada: requisição ignorada para não excluir dados.');",
+                  "    if (pm.execution && pm.execution.skipRequest) pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC34 - Status 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('TC34 - Corpo de erro padronizado (status 409)', () => errorBody(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/challenges/{{challengeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challenges",
+                "{{challengeId}}"
+              ]
+            },
+            "description": "Exige challengeId de um desafio com candidaturas existentes. Não exclui dados.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Candidatura inexistente - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC41 - Status 404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('TC41 - Corpo de erro padronizado (status 404)', () => errorBody(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "999999999"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Consultar submissões da candidatura",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/submissions/application/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "submissions",
+                "application",
+                "{{applicationId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "",
+                  "// Executa antes do envio da solução: a candidatura ainda não possui entrega",
+                  "pm.test('EXTRA - Status 404 Not Found (candidatura ainda sem entrega)', () => pm.response.to.have.status(404));",
+                  "pm.test('EXTRA - Corpo de erro padronizado (status 404)', () => errorBody(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Entregas",
+      "item": [
+        {
+          "name": "Enviar solução - 201 (salva submissionId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC42 - Status 201 Created', () => pm.response.to.have.status(201));",
+                  "const b = json();",
+                  "pm.test('TC42 - Entrega registrada para a candidatura', () => {",
+                  "    pm.expect(b.id).to.be.a('number');",
+                  "    pm.expect(String(b.applicationId)).to.eql(String(pm.variables.get('applicationId')));",
+                  "    pm.expect(b.status).to.eql('SUBMITTED');",
+                  "    pm.expect(b.fileUrl).to.eql('https://github.com/exemplo/ventrya-solucao');",
+                  "});",
+                  "if (pm.response.code === 201 && b) save('submissionId', b.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"applicationId\": {{applicationId}},\n  \"description\": \"Desenvolvi uma API REST em Java e Spring Boot para resolver o desafio, com autenticação JWT e banco de dados.\",\n  \"fileUrl\": \"https://github.com/exemplo/ventrya-solucao\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "submissions"
+              ]
+            },
+            "description": "Postman resolve applicationId como texto na interpolação; se a API rejeitar número como string, use o script pré-requisição ou substitua pelo ID numérico."
+          },
+          "response": []
+        },
+        {
+          "name": "Entrega por ID - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC43 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC43 - Retorna a entrega solicitada', () => pm.expect(String(json().id)).to.eql(String(pm.variables.get('submissionId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/submissions/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "submissions",
+                "{{submissionId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entrega por candidatura - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC44 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC44 - Entrega vinculada à candidatura', () => {",
+                  "    const b = json();",
+                  "    pm.expect(String(b.applicationId)).to.eql(String(pm.variables.get('applicationId')));",
+                  "    pm.expect(String(b.id)).to.eql(String(pm.variables.get('submissionId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/submissions/application/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "submissions",
+                "application",
+                "{{applicationId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entrega duplicada - 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC45 - Status 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('TC45 - Corpo de erro padronizado (status 409)', () => errorBody(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"applicationId\": {{applicationId}},\n  \"description\": \"Tentativa de enviar uma segunda solução para a mesma candidatura.\",\n  \"fileUrl\": \"https://github.com/exemplo/segunda-solucao\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "submissions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Descrição curta - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC46 - Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('TC46 - Corpo de erro padronizado (status 400)', () => errorBody(400));",
+                  "pm.test('TC46 - validationErrors aponta os campos inválidos', () => {",
+                  "    const b = json();",
+                  "    pm.expect(b.validationErrors, 'validationErrors').to.be.an('object');",
+                  "    ['description'].forEach(f => pm.expect(b.validationErrors).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"applicationId\": 1,\n  \"description\": \"Curta\",\n  \"fileUrl\": \"https://github.com/exemplo/projeto\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "submissions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "URL inválida - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC47 - Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('TC47 - Corpo de erro padronizado (status 400)', () => errorBody(400));",
+                  "pm.test('TC47 - validationErrors aponta os campos inválidos', () => {",
+                  "    const b = json();",
+                  "    pm.expect(b.validationErrors, 'validationErrors').to.be.an('object');",
+                  "    ['fileUrl'].forEach(f => pm.expect(b.validationErrors).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"applicationId\": 1,\n  \"description\": \"Descrição suficientemente longa para passar na validação.\",\n  \"fileUrl\": \"ftp://exemplo.com/arquivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "submissions"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06 - Feedbacks (dependem de dados gerados)",
+      "item": [
+        {
+          "name": "Feedback por entrega - 200",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "",
+                  "// Processamento assíncrono (RabbitMQ + IA): aguarda entre as tentativas",
+                  "const tries = Number(pm.collectionVariables.get('_pollFeedback') || 0);",
+                  "if (tries > 0) {",
+                  "    const wait = Number(pm.variables.get('pollIntervalMs') || 5000);",
+                  "    console.log('Feedback: tentativa ' + (tries + 1) + ', aguardando ' + wait + ' ms');",
+                  "    setTimeout(() => {}, wait);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "",
+                  "const tries = Number(pm.collectionVariables.get('_pollFeedback') || 0);",
+                  "const max = Number(pm.variables.get('pollMaxAttempts') || 12);",
+                  "const next = (n) => (pm.execution && pm.execution.setNextRequest) ? pm.execution.setNextRequest(n) : postman.setNextRequest(n);",
+                  "if (pm.response.code === 404 && tries + 1 < max) {",
+                  "    // ainda processando: repete esta requisição no Runner/Newman",
+                  "    pm.collectionVariables.set('_pollFeedback', tries + 1);",
+                  "    next(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.set('_pollFeedback', 0);",
+                  "",
+                  "    pm.test('TC49 - Status 200 OK (feedback gerado pela IA)', () => pm.response.to.have.status(200));",
+                  "    const b = json();",
+                  "    pm.test('TC49 - Feedback vinculado à entrega', () => {",
+                  "        pm.expect(String(b.submissionId)).to.eql(String(pm.variables.get('submissionId')));",
+                  "        pm.expect(b.comment).to.be.a('string').and.not.empty;",
+                  "        pm.expect(b.rating).to.be.within(1, 5);",
+                  "    });",
+                  "    if (pm.response.code === 200 && b) save('feedbackId', b.id);",
+                  "",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/feedbacks/submission/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "feedbacks",
+                "submission",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "Somente 200 após o processamento/persistência de feedback."
+          },
+          "response": []
+        },
+        {
+          "name": "Feedback por ID - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC48 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC48 - Retorna o feedback solicitado', () => {",
+                  "    const b = json();",
+                  "    pm.expect(String(b.id)).to.eql(String(pm.variables.get('feedbackId')));",
+                  "    pm.expect(b).to.have.property('strengths');",
+                  "    pm.expect(b).to.have.property('improvements');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/feedbacks/{{feedbackId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "feedbacks",
+                "{{feedbackId}}"
+              ]
+            },
+            "description": "Somente 200 se houver feedback persistido e pertencente ao usuário."
+          },
+          "response": []
+        },
+        {
+          "name": "Feedback inexistente - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC50 - Status 404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('TC50 - Corpo de erro padronizado (status 404)', () => errorBody(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/feedbacks/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "feedbacks",
+                "999999999"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "07 - Portfólios (dependem de dados gerados)",
+      "item": [
+        {
+          "name": "Portfólio por entrega - 200",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "",
+                  "// Processamento assíncrono (RabbitMQ + IA): aguarda entre as tentativas",
+                  "const tries = Number(pm.collectionVariables.get('_pollPortfolio') || 0);",
+                  "if (tries > 0) {",
+                  "    const wait = Number(pm.variables.get('pollIntervalMs') || 5000);",
+                  "    console.log('Portfólio: tentativa ' + (tries + 1) + ', aguardando ' + wait + ' ms');",
+                  "    setTimeout(() => {}, wait);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "",
+                  "const tries = Number(pm.collectionVariables.get('_pollPortfolio') || 0);",
+                  "const max = Number(pm.variables.get('pollMaxAttempts') || 12);",
+                  "const next = (n) => (pm.execution && pm.execution.setNextRequest) ? pm.execution.setNextRequest(n) : postman.setNextRequest(n);",
+                  "if (pm.response.code === 404 && tries + 1 < max) {",
+                  "    // ainda processando: repete esta requisição no Runner/Newman",
+                  "    pm.collectionVariables.set('_pollPortfolio', tries + 1);",
+                  "    next(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.set('_pollPortfolio', 0);",
+                  "",
+                  "    pm.test('TC53 - Status 200 OK (portfólio gerado)', () => pm.response.to.have.status(200));",
+                  "    const b = json();",
+                  "    pm.test('TC53 - Portfólio vinculado à entrega', () => {",
+                  "        pm.expect(String(b.submissionId)).to.eql(String(pm.variables.get('submissionId')));",
+                  "        pm.expect(b.title).to.be.a('string').and.not.empty;",
+                  "    });",
+                  "    if (pm.response.code === 200 && b) save('portfolioId', b.id);",
+                  "",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolios/submission/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolios",
+                "submission",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "Somente 200 após a geração e persistência de portfólio."
+          },
+          "response": []
+        },
+        {
+          "name": "Meus portfólios - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC51 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC51 - Retorno paginado (content, totalElements)', () => { const b = json(); pm.expect(b.content).to.be.an('array'); pm.expect(b).to.have.property('totalElements'); });",
+                  "pm.test('TC51 - Lista contém o portfólio gerado', () => pm.expect(json().content.map(p => String(p.id))).to.include(String(pm.variables.get('portfolioId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolios/me?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolios",
+                "me"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Portfólio por ID - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC52 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC52 - Retorna o portfólio solicitado', () => {",
+                  "    const b = json();",
+                  "    pm.expect(String(b.id)).to.eql(String(pm.variables.get('portfolioId')));",
+                  "    pm.expect(b).to.have.property('generatedDescription');",
+                  "    pm.expect(b).to.have.property('skills');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolios/{{portfolioId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolios",
+                "{{portfolioId}}"
+              ]
+            },
+            "description": "Somente 200 se houver portfólio persistido e pertencente ao usuário."
+          },
+          "response": []
+        },
+        {
+          "name": "Portfólio inexistente - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC54 - Status 404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('TC54 - Corpo de erro padronizado (status 404)', () => errorBody(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolios/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolios",
+                "999999999"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "08 - Entrevistas",
+      "item": [
+        {
+          "name": "Iniciar entrevista - 201 (salva interviewId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC55 - Status 201 Created', () => pm.response.to.have.status(201));",
+                  "const b = json();",
+                  "pm.test('TC55 - Entrevista criada em andamento com 5 perguntas', () => {",
+                  "    pm.expect(b.status).to.eql('IN_PROGRESS');",
+                  "    pm.expect(b.professionalArea).to.eql('TECHNOLOGY');",
+                  "    pm.expect(b.questions).to.have.lengthOf(5);",
+                  "});",
+                  "if (pm.response.code === 201 && b) save('interviewId', b.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"professionalArea\": \"TECHNOLOGY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Minhas entrevistas - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC56 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC56 - Retorno paginado (content, totalElements)', () => { const b = json(); pm.expect(b.content).to.be.an('array'); pm.expect(b).to.have.property('totalElements'); });",
+                  "pm.test('TC56 - Lista contém a entrevista criada', () => pm.expect(json().content.map(i => String(i.id))).to.include(String(pm.variables.get('interviewId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/me?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "me"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entrevista por ID - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC57 - Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('TC57 - Retorna a entrevista com as 5 perguntas', () => {",
+                  "    const b = json();",
+                  "    pm.expect(String(b.id)).to.eql(String(pm.variables.get('interviewId')));",
+                  "    pm.expect(b.questions.map(q => q.questionNumber).sort()).to.eql([1, 2, 3, 4, 5]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/{{interviewId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "{{interviewId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pergunta 3 fora da ordem - 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC58 - Status 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('TC58 - Corpo de erro padronizado (status 409)', () => errorBody(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"Esta resposta foi enviada fora da ordem prevista.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/{{interviewId}}/questions/3/answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "{{interviewId}}",
+                "questions",
+                "3",
+                "answer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Número de pergunta inválido - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC62 - Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('TC62 - Corpo de erro padronizado (status 400)', () => errorBody(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"Resposta de teste.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/{{interviewId}}/questions/6/answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "{{interviewId}}",
+                "questions",
+                "6",
+                "answer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Responder pergunta 1 - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC59 - Status 200 OK (pergunta 1)', () => pm.response.to.have.status(200));",
+                  "pm.test('TC59 - Resposta da pergunta 1 registrada', () => {",
+                  "    const q = json().questions.find(x => x.questionNumber === 1);",
+                  "    pm.expect(q.answer).to.eql(JSON.parse(pm.request.body.raw).answer);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"Sou estudante de tecnologia e estou desenvolvendo minhas competências em backend.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/{{interviewId}}/questions/1/answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "{{interviewId}}",
+                "questions",
+                "1",
+                "answer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Responder pergunta 2 - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC59 - Status 200 OK (pergunta 2)', () => pm.response.to.have.status(200));",
+                  "pm.test('TC59 - Resposta da pergunta 2 registrada', () => {",
+                  "    const q = json().questions.find(x => x.questionNumber === 2);",
+                  "    pm.expect(q.answer).to.eql(JSON.parse(pm.request.body.raw).answer);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"Meus pontos fortes são organização e colaboração; quero melhorar apresentações.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/{{interviewId}}/questions/2/answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "{{interviewId}}",
+                "questions",
+                "2",
+                "answer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Responder pergunta 3 - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC59 - Status 200 OK (pergunta 3)', () => pm.response.to.have.status(200));",
+                  "pm.test('TC59 - Resposta da pergunta 3 registrada', () => {",
+                  "    const q = json().questions.find(x => x.questionNumber === 3);",
+                  "    pm.expect(q.answer).to.eql(JSON.parse(pm.request.body.raw).answer);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"Tenho interesse em tecnologia porque gosto de resolver problemas reais.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/{{interviewId}}/questions/3/answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "{{interviewId}}",
+                "questions",
+                "3",
+                "answer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Responder pergunta 4 - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC59 - Status 200 OK (pergunta 4)', () => pm.response.to.have.status(200));",
+                  "pm.test('TC59 - Resposta da pergunta 4 registrada', () => {",
+                  "    const q = json().questions.find(x => x.questionNumber === 4);",
+                  "    pm.expect(q.answer).to.eql(JSON.parse(pm.request.body.raw).answer);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"Em um projeto acadêmico, investiguei um erro de integração e corrigi a configuração.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/{{interviewId}}/questions/4/answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "{{interviewId}}",
+                "questions",
+                "4",
+                "answer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Responder pergunta 5 - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC59 - Status 200 OK (pergunta 5)', () => pm.response.to.have.status(200));",
+                  "pm.test('TC59 - Resposta da pergunta 5 registrada', () => {",
+                  "    const q = json().questions.find(x => x.questionNumber === 5);",
+                  "    pm.expect(q.answer).to.eql(JSON.parse(pm.request.body.raw).answer);",
+                  "});",
+                  "pm.test('TC59 - Após a 5ª resposta a entrevista vai para PROCESSING', () => pm.expect(json().status).to.eql('PROCESSING'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"Escuto a equipe, compartilho informações e busco soluções colaborativas.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/{{interviewId}}/questions/5/answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "{{interviewId}}",
+                "questions",
+                "5",
+                "answer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Responder novamente pergunta 1 - 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC60 - Status 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('TC60 - Corpo de erro padronizado (status 409)', () => errorBody(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"Tentativa de alterar resposta definitiva.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/{{interviewId}}/questions/1/answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "{{interviewId}}",
+                "questions",
+                "1",
+                "answer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resposta vazia - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC61 - Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('TC61 - Corpo de erro padronizado (status 400)', () => errorBody(400));",
+                  "pm.test('TC61 - validationErrors aponta os campos inválidos', () => {",
+                  "    const b = json();",
+                  "    pm.expect(b.validationErrors, 'validationErrors').to.be.an('object');",
+                  "    ['answer'].forEach(f => pm.expect(b.validationErrors).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/{{interviewId}}/questions/1/answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "{{interviewId}}",
+                "questions",
+                "1",
+                "answer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entrevista inexistente - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC63 - Status 404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('TC63 - Corpo de erro padronizado (status 404)', () => errorBody(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "999999999"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "09 - Segurança e roles (requer usuário ADMIN)",
+      "item": [
+        {
+          "name": "STUDENT acessa rota administrativa - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC64 - Status 403 Forbidden', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "1"
+              ]
+            },
+            "description": "Valida regra hasRole('ADMIN') em /api/users/**; endpoint administrativo real ainda precisa ser implementado."
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN tenta criar candidatura - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC65 - Status 403 Forbidden', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/challenge/{{challengeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "challenge",
+                "{{challengeId}}"
+              ]
+            },
+            "description": "Configure a variável token com JWT ADMIN temporariamente antes deste teste."
+          },
+          "response": []
+        },
+        {
+          "name": "Sem JWT em candidaturas - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC66 - Status 401 Unauthorized', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "JWT inválido - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const save = (k, v) => { pm.collectionVariables.set(k, v); if (pm.environment && pm.environment.name) pm.environment.set(k, v); };",
+                  "const json = () => { try { return pm.response.json(); } catch (e) { return null; } };",
+                  "const errorBody = (code) => {",
+                  "    const b = json();",
+                  "    pm.expect(b, 'corpo de erro em JSON').to.be.an('object');",
+                  "    pm.expect(b.status, 'campo status do erro').to.eql(code);",
+                  "};",
+                  "pm.test('TC67 - Status 401 Unauthorized', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{auth_secret_1ccp}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/interviews/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interviews",
+                "me"
+              ]
+            },
+            "description": "Substitua temporariamente token por um JWT inválido antes de executar."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://ventryaapi.onrender.com"
+    },
+    {
+      "key": "studentEmail",
+      "value": "estudante.postman@example.com"
+    },
+    {
+      "key": "studentPassword",
+      "value": "SenhaTeste123!"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "organizationId",
+      "value": "1"
+    },
+    {
+      "key": "challengeId",
+      "value": "1"
+    },
+    {
+      "key": "applicationId",
+      "value": ""
+    },
+    {
+      "key": "submissionId",
+      "value": ""
+    },
+    {
+      "key": "feedbackId",
+      "value": ""
+    },
+    {
+      "key": "portfolioId",
+      "value": ""
+    },
+    {
+      "key": "interviewId",
+      "value": ""
+    },
+    {
+      "key": "auth_secret_1ccp",
+      "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlQGV4YW1wbGUuY29tIn0.assinatura-invalida"
+    },
+    {
+      "key": "crudOrganizationId",
+      "value": ""
+    },
+    {
+      "key": "crudOrganizationEmail",
+      "value": ""
+    },
+    {
+      "key": "crudChallengeId",
+      "value": ""
+    },
+    {
+      "key": "challengeDifficulty",
+      "value": "BEGINNER"
+    },
+    {
+      "key": "challengeDeadline",
+      "value": "2027-12-31"
+    },
+    {
+      "key": "studentToken",
+      "value": ""
+    },
+    {
+      "key": "adminEmail",
+      "value": ""
+    },
+    {
+      "key": "adminPassword",
+      "value": ""
+    },
+    {
+      "key": "pollMaxAttempts",
+      "value": "12"
+    },
+    {
+      "key": "pollIntervalMs",
+      "value": "5000"
+    },
+    {
+      "key": "maxResponseMs",
+      "value": "30000"
+    },
+    {
+      "key": "_pollFeedback",
+      "value": "0"
+    },
+    {
+      "key": "_pollPortfolio",
+      "value": "0"
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Verificações aplicadas a todas as requisições",
+          "const maxMs = Number(pm.variables.get('maxResponseMs') || 30000);",
+          "pm.test('Tempo de resposta abaixo de ' + maxMs + ' ms', () => pm.expect(pm.response.responseTime).to.be.below(maxMs));",
+          "if (pm.response.code !== 204 && pm.response.text().length > 0) {",
+          "    pm.test('Resposta em JSON', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+          "}"
+        ]
+      }
+    }
+  ]
+}
